@@ -5,7 +5,7 @@ Branding: Agentur Philipp GmbH
 import os, json, time, requests
 import streamlit as st
 
-BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 
 @st.cache_data(ttl=300)
