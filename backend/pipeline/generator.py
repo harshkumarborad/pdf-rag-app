@@ -49,16 +49,20 @@ def _build_prompt(query: str, chunks: List[Dict[str, Any]]) -> str:
     return (
         f"You are a precise document assistant.{multi_doc_note} Answer the user's question "
         f"using ONLY the provided context. Always cite which source (file name and page) "
-        f"your answer comes from. If the context doesn't contain enough information, say so clearly.\n\n"
+        f"your answer comes from. If the context doesn't contain enough information, say so clearly.\n"
+        f"CRITICAL: Detect the language of the QUESTION and write your entire answer in that same language. "
+        f"If the question is in German, answer fully in German. If in French, answer in French. "
+        f"Never switch to English unless the question itself is in English.\n\n"
         f"=== CONTEXT ===\n{context}\n\n"
         f"=== QUESTION ===\n{query}\n\n"
         f"=== ANSWER ===\n"
     )
 
 def _strip_cot(text: str) -> str:
-    """Remove DeepSeek-R1 chain-of-thought <think>...</think> blocks."""
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    return text.strip()
+    """Remove DeepSeek-R1 chain-of-thought <think>...</think> blocks.
+    Falls back to the raw text if stripping leaves nothing (CoT used all tokens)."""
+    stripped = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    return stripped if stripped else text.strip()
 
 # ── Standard (non-streaming) generation ───────────────────────────────────────
 
@@ -76,7 +80,11 @@ def generate(query: str, chunks: List[Dict[str, Any]], model: str = None, max_to
     client = get_client()
     messages = [{"role": "user", "content": prompt}]
     active_model = model or config.LLM_MODEL
-    token_limit = max_tokens or config.MAX_NEW_TOKENS
+    # DeepSeek-R1 models use ~200-400 tokens for CoT before the actual answer.
+    # Enforce a minimum so the answer is never cut off inside the think block.
+    raw_limit = max_tokens or config.MAX_NEW_TOKENS
+    is_cot_model = "deepseek" in active_model.lower() or "r1" in active_model.lower()
+    token_limit = max(raw_limit, 512) if is_cot_model else raw_limit
 
     for attempt in range(3):
         try:
@@ -87,6 +95,12 @@ def generate(query: str, chunks: List[Dict[str, Any]], model: str = None, max_to
                 temperature=config.TEMPERATURE,
             )
             raw = resp.choices[0].message.content
+            if raw is None:
+                # HF returned None content — treat as a transient failure and retry
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                    continue
+                raw = ""
             return _strip_cot(raw)
         except Exception as e:
             err = str(e)
@@ -121,7 +135,9 @@ def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None,
     messages = [{"role": "user", "content": prompt}]
     buffer = ""
     active_model = model or config.LLM_MODEL
-    token_limit = max_tokens or config.MAX_NEW_TOKENS
+    raw_limit = max_tokens or config.MAX_NEW_TOKENS
+    is_cot_model = "deepseek" in active_model.lower() or "r1" in active_model.lower()
+    token_limit = max(raw_limit, 512) if is_cot_model else raw_limit
 
     try:
         resp = client.chat_completion(

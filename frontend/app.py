@@ -131,7 +131,9 @@ with st.sidebar:
                                  accept_multiple_files=True, label_visibility="collapsed")
 
     if uploaded and st.button("🚀 Index Documents", use_container_width=True):
-        with st.spinner("Uploading & indexing..."):
+        total_mb = sum(f.size for f in uploaded) / (1024 * 1024)
+        eta_msg = f"~{max(1, int(total_mb * 1.5))}–{max(2, int(total_mb * 3))} min" if total_mb > 1 else "~30 s"
+        with st.spinner(f"Uploading & indexing ({total_mb:.1f} MB) — embedding via HF API takes {eta_msg} for large PDFs…"):
             try:
                 files = [("files", (f.name, f.read(), "application/pdf")) for f in uploaded]
                 r = requests.post(f"{BACKEND}/upload", files=files, timeout=1200)
@@ -165,8 +167,8 @@ with st.sidebar:
             selected_model = None
 
         top_k = st.slider("Chunks to retrieve (Top-K)", 3, 10, 5)
-        max_tokens = st.slider("Max answer length (tokens)", 128, 1024, 512, step=128,
-                               help="Lower = faster response. 512 covers most answers well.")
+        max_tokens = st.slider("Max answer length (tokens)", 256, 1024, 512, step=128,
+                               help="Min 256 recommended. DeepSeek-R1 needs 512+ for CoT + answer.")
         use_mmr = st.toggle("MMR Diversity", value=True)
         use_rerank = st.toggle("Cross-Encoder Re-ranking ✨", value=False,
                                help="Bonus: Re-ranks chunks with a cross-encoder before generation")
