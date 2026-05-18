@@ -157,6 +157,8 @@ with st.sidebar:
             selected_model = None
 
         top_k = st.slider("Chunks to retrieve (Top-K)", 3, 10, 5)
+        max_tokens = st.slider("Max answer length (tokens)", 128, 1024, 512, step=128,
+                               help="Lower = faster response. 512 covers most answers well.")
         use_mmr = st.toggle("MMR Diversity", value=True)
         use_rerank = st.toggle("Cross-Encoder Re-ranking ✨", value=False,
                                help="Bonus: Re-ranks chunks with a cross-encoder before generation")
@@ -179,7 +181,7 @@ with st.sidebar:
             st.session_state.stats = {}
             st.rerun()
     else:
-        top_k, use_mmr, use_rerank, selected_model = 5, True, False, None
+        top_k, max_tokens, use_mmr, use_rerank, selected_model = 5, 512, True, False, None
 
 # ── Hero ──────────────────────────────────────────────────────
 st.markdown("""
@@ -275,6 +277,7 @@ with tab_chat:
                 "top_k": top_k,
                 "use_mmr": use_mmr,
                 "use_reranking": use_rerank,
+                "max_tokens": max_tokens,
                 **({"llm_model": selected_model} if selected_model else {}),
             }
 
@@ -336,6 +339,7 @@ with tab_chat:
         else:
             payload = {"session_id": st.session_state.session_id, "query": query,
                        "top_k": top_k, "use_mmr": use_mmr, "use_reranking": use_rerank,
+                       "max_tokens": max_tokens,
                        **({"llm_model": selected_model} if selected_model else {})}
             with st.spinner("Generating answer…"):
                 try:

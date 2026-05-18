@@ -39,6 +39,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
+@app.on_event("startup")
+async def warmup():
+    """Ping the embedding model on boot so the first user request skips the cold-start wait."""
+    from pipeline.embeddings import embed_query
+    try:
+        embed_query("warmup")
+        print("[Warmup] Embedding model ready.")
+    except Exception as e:
+        print(f"[Warmup] Embedding warmup failed (non-fatal): {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -59,6 +70,7 @@ class ChatRequest(BaseModel):
     use_mmr: bool = True
     use_reranking: bool = False
     llm_model: Optional[str] = None
+    max_tokens: Optional[int] = None
 
 
 class ChatResponse(BaseModel):
@@ -180,7 +192,7 @@ def chat(req: ChatRequest):
             use_mmr=req.use_mmr,
             use_reranking=req.use_reranking,
         )
-        answer = generate(req.query, chunks, model=active_model)
+        answer = generate(req.query, chunks, model=active_model, max_tokens=req.max_tokens)
         metrics = evaluate(req.query, answer, chunks)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -216,6 +228,7 @@ def chat_stream(
     use_mmr: bool = True,
     use_reranking: bool = False,
     llm_model: Optional[str] = None,
+    max_tokens: Optional[int] = None,
 ):
     """
     [Bonus] Streaming chat via Server-Sent Events.
@@ -244,7 +257,7 @@ def chat_stream(
 
             # Stream tokens
             full_answer = ""
-            for token in generate_stream(query, chunks, model=active_model):
+            for token in generate_stream(query, chunks, model=active_model, max_tokens=max_tokens):
                 full_answer += token
                 yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
 

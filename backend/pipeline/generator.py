@@ -62,7 +62,7 @@ def _strip_cot(text: str) -> str:
 
 # ── Standard (non-streaming) generation ───────────────────────────────────────
 
-def generate(query: str, chunks: List[Dict[str, Any]], model: str = None) -> str:
+def generate(query: str, chunks: List[Dict[str, Any]], model: str = None, max_tokens: int = None) -> str:
     """
     Generate a grounded answer using the retrieved chunks.
 
@@ -76,13 +76,14 @@ def generate(query: str, chunks: List[Dict[str, Any]], model: str = None) -> str
     client = get_client()
     messages = [{"role": "user", "content": prompt}]
     active_model = model or config.LLM_MODEL
+    token_limit = max_tokens or config.MAX_NEW_TOKENS
 
     for attempt in range(3):
         try:
             resp = client.chat_completion(
                 messages=messages,
                 model=active_model,
-                max_tokens=config.MAX_NEW_TOKENS,
+                max_tokens=token_limit,
                 temperature=config.TEMPERATURE,
             )
             raw = resp.choices[0].message.content
@@ -107,7 +108,7 @@ def generate(query: str, chunks: List[Dict[str, Any]], model: str = None) -> str
 
 # ── Streaming generation (Bonus) ───────────────────────────────────────────────
 
-def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None) -> Generator[str, None, None]:
+def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None, max_tokens: int = None) -> Generator[str, None, None]:
     """
     Stream tokens from the HF Inference API using Server-Sent Events.
     Yields token strings one by one.
@@ -120,12 +121,13 @@ def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None)
     messages = [{"role": "user", "content": prompt}]
     buffer = ""
     active_model = model or config.LLM_MODEL
+    token_limit = max_tokens or config.MAX_NEW_TOKENS
 
     try:
         resp = client.chat_completion(
             messages=messages,
             model=active_model,
-            max_tokens=config.MAX_NEW_TOKENS,
+            max_tokens=token_limit,
             temperature=config.TEMPERATURE,
             stream=True,
         )
