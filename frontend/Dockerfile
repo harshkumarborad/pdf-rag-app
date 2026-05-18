@@ -15,4 +15,5 @@ RUN echo '[server]\nport = 8501\nheadless = true\nenableXsrfProtection = false\n
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "app.py"]
+# Railway injects $PORT; fall back to 8501 for local docker-compose.
+CMD ["sh", "-c", "streamlit run app.py --server.port ${PORT:-8501} --server.headless true"]
