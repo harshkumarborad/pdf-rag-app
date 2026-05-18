@@ -88,7 +88,15 @@ def generate(query: str, chunks: List[Dict[str, Any]], model: str = None) -> str
             raw = resp.choices[0].message.content
             return _strip_cot(raw)
         except Exception as e:
-            if "503 Server Error" in str(e) or "loading" in str(e).lower():
+            err = str(e)
+            if "404" in err or "Not Found" in err:
+                # Model not available on the current HF inference provider.
+                short = active_model.split("/")[-1]
+                raise RuntimeError(
+                    f"**{short}** is not available on the free HF inference tier right now. "
+                    f"Please switch to **DeepSeek-R1 7B** in the sidebar — it is the confirmed default."
+                )
+            if "503 Server Error" in err or "loading" in err.lower():
                 time.sleep(2 ** attempt)
                 continue
             if attempt == 2:
@@ -139,4 +147,12 @@ def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None)
             elif "<think>" not in buffer:
                 yield token
     except Exception as e:
-        yield f"\n[Error during streaming: {e}]"
+        err = str(e)
+        if "404" in err or "Not Found" in err:
+            short = active_model.split("/")[-1]
+            yield (
+                f"\n\n**{short}** is not available on the free HF inference tier right now. "
+                f"Please switch to **DeepSeek-R1 7B** in the sidebar."
+            )
+        else:
+            yield f"\n[Error during streaming: {e}]"

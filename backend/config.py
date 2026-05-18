@@ -31,7 +31,9 @@ DO_SAMPLE: bool = True
 # ── Bonus Features ─────────────────────────────────────────
 ENABLE_RERANKING: bool = os.getenv("ENABLE_RERANKING", "false").lower() == "true"
 
-# ── Available LLM models (HF Serverless Inference) ─────────
+# ── Available LLM models (HF Inference API / Novita provider) ──
+# All models below are hosted on the Novita inference provider that HF
+# routes free-tier requests to. Swap out if HF changes routing.
 AVAILABLE_MODELS = [
     {
         "id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
@@ -39,9 +41,9 @@ AVAILABLE_MODELS = [
         "description": "Chain-of-thought reasoning · thorough, cited answers",
     },
     {
-        "id": "mistralai/Mistral-7B-Instruct-v0.3",
-        "label": "Mistral 7B",
-        "description": "Fast & concise · good all-round instruction following",
+        "id": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+        "label": "DeepSeek-R1 Llama 8B",
+        "description": "Llama-based distill · slightly more concise than Qwen variant",
     },
     {
         "id": "Qwen/Qwen2.5-7B-Instruct",
@@ -49,8 +51,8 @@ AVAILABLE_MODELS = [
         "description": "Strong multilingual support · good for non-English docs",
     },
     {
-        "id": "microsoft/Phi-3.5-mini-instruct",
-        "label": "Phi-3.5 Mini",
+        "id": "meta-llama/Llama-3.2-3B-Instruct",
+        "label": "Llama 3.2 3B",
         "description": "Smallest & fastest · great for quick lookups",
     },
 ]

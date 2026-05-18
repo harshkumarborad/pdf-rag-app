@@ -54,6 +54,14 @@ body,.stApp,[data-testid="stAppViewContainer"],[data-testid="block-container"],.
 [data-testid="stSidebar"] [data-testid="stFileUploader"] span,
 [data-testid="stSidebar"] [data-testid="stFileUploader"] p{
   color:#1d3557!important;}
+[data-testid="stSidebar"] [data-testid="stSelectbox"] div,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] span,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] p,
+[data-testid="stSidebar"] [data-baseweb="select"] div,
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] input{
+  color:#1d3557!important;background-color:#fff!important;}
+[data-baseweb="popover"] *,[data-baseweb="menu"] *{color:#1d3557!important;}
 .stButton>button{background:#457b9d;color:#fff;border:none;border-radius:8px;font-weight:600;transition:all .2s;}
 .stButton>button:hover{background:#1d3557;transform:translateY(-1px);}
 .hero{background:#1d3557;border-radius:16px;padding:28px 36px;margin-bottom:20px;position:relative;overflow:hidden;}
@@ -234,12 +242,20 @@ with tab_chat:
                         unsafe_allow_html=True)
 
     st.markdown("")
-    query = st.text_input("Ask a question about your documents…", placeholder="e.g. What are the main obligations for providers?",
-                          label_visibility="collapsed")
+    with st.form("chat_form", clear_on_submit=True):
+        query = st.text_input(
+            "Ask a question about your documents…",
+            placeholder="e.g. What are the main obligations for providers?",
+            label_visibility="collapsed",
+        )
+        col_ask, col_clr = st.columns([4, 1])
+        ask = col_ask.form_submit_button(
+            "🔍 Ask", use_container_width=True,
+            disabled=not st.session_state.session_id,
+        )
+        clear_chat = col_clr.form_submit_button("🗑️", use_container_width=True)
 
-    col_ask, col_clr = st.columns([4, 1])
-    ask = col_ask.button("🔍 Ask", use_container_width=True, disabled=not st.session_state.session_id)
-    if col_clr.button("🗑️", use_container_width=True):
+    if clear_chat:
         st.session_state.chat = []
         st.rerun()
 
