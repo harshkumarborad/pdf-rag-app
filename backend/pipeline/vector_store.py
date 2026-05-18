@@ -120,6 +120,42 @@ def similarity_search(
     return output
 
 
+def similarity_search_filtered(
+    query_embedding: List[float],
+    session_id: str,
+    source_file: str,
+    top_k: int = 1,
+) -> List[Tuple[Document, float]]:
+    """
+    Like similarity_search but restricted to chunks from a single source file.
+    Used to guarantee at least one result per document in multi-PDF sessions.
+    """
+    try:
+        collection = get_client().get_collection(_collection_name(session_id))
+        n = min(top_k, collection.count())
+        if n == 0:
+            return []
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=n,
+            where={"source_file": source_file},
+            include=["documents", "metadatas", "distances"],
+        )
+        output = []
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        ):
+            similarity = round(1.0 - dist, 4)
+            lc_doc = Document(page_content=doc, metadata=meta)
+            output.append((lc_doc, similarity))
+        return output
+    except Exception as e:
+        print(f"[VectorStore] Filtered search failed for '{source_file}': {e}")
+        return []
+
+
 def get_stats(session_id: str) -> Dict[str, Any]:
     """Return stats for a session's collection."""
     try:

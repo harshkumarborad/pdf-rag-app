@@ -9,6 +9,17 @@ BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
 @st.cache_data(ttl=300)
+def fetch_models() -> list:
+    """Fetch available LLM models from the backend. Cached for 5 min."""
+    try:
+        r = requests.get(f"{BACKEND}/models", timeout=10)
+        r.raise_for_status()
+        return r.json().get("models", [])
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=300)
 def fetch_question_sets() -> dict:
     """Fetch the full question-set catalog from the backend.
     Cached so we don't hit the API on every rerun. Returns {} on failure
@@ -87,6 +98,7 @@ for k, v in {"session_id": None, "chat": [], "stats": {}, "streaming": True}.ite
         st.session_state[k] = v
 
 QUESTION_SETS = fetch_question_sets()
+AVAILABLE_MODELS = fetch_models()
 
 # ── Sidebar ───────────────────────────────────────────────────
 with st.sidebar:
@@ -119,6 +131,23 @@ with st.sidebar:
     if st.session_state.session_id:
         st.markdown("---")
         st.markdown("#### ⚙️ Settings")
+
+        # ── LLM model selector ────────────────────────────────
+        if AVAILABLE_MODELS:
+            model_labels = [m["label"] for m in AVAILABLE_MODELS]
+            model_ids    = [m["id"]    for m in AVAILABLE_MODELS]
+            model_descs  = [m.get("description", "") for m in AVAILABLE_MODELS]
+            sel_idx = st.selectbox(
+                "🤖 LLM Model",
+                range(len(model_labels)),
+                format_func=lambda i: model_labels[i],
+                help="\n".join(f"**{model_labels[i]}** — {model_descs[i]}" for i in range(len(model_labels))),
+            )
+            selected_model = model_ids[sel_idx]
+            st.caption(f"_{model_descs[sel_idx]}_")
+        else:
+            selected_model = None
+
         top_k = st.slider("Chunks to retrieve (Top-K)", 3, 10, 5)
         use_mmr = st.toggle("MMR Diversity", value=True)
         use_rerank = st.toggle("Cross-Encoder Re-ranking ✨", value=False,
@@ -142,7 +171,7 @@ with st.sidebar:
             st.session_state.stats = {}
             st.rerun()
     else:
-        top_k, use_mmr, use_rerank = 5, True, False
+        top_k, use_mmr, use_rerank, selected_model = 5, True, False, None
 
 # ── Hero ──────────────────────────────────────────────────────
 st.markdown("""
@@ -174,7 +203,9 @@ with tab_chat:
             st.markdown(f"<div class='chat-user'><div class='label label-u'>You →</div>{msg['content']}</div>",
                         unsafe_allow_html=True)
         else:
-            st.markdown(f"<div class='chat-ai'><div class='label label-ai'>Agentur Philipp RAG · DeepSeek-R1</div>"
+            used_model = msg.get("llm_model", "")
+            model_label = next((m["label"] for m in AVAILABLE_MODELS if m["id"] == used_model), used_model.split("/")[-1] if used_model else "DeepSeek-R1")
+            st.markdown(f"<div class='chat-ai'><div class='label label-ai'>Agentur Philipp RAG · {model_label}</div>"
                         f"{msg['content'].replace(chr(10),'<br>')}</div>", unsafe_allow_html=True)
             if msg.get("sources"):
                 with st.expander(f"📎 {len(msg['sources'])} source chunks", expanded=False):
@@ -228,6 +259,7 @@ with tab_chat:
                 "top_k": top_k,
                 "use_mmr": use_mmr,
                 "use_reranking": use_rerank,
+                **({"llm_model": selected_model} if selected_model else {}),
             }
 
             placeholder = st.empty()
@@ -282,11 +314,13 @@ with tab_chat:
                 "content": full_answer,
                 "sources": sources,
                 "metrics": metrics,
+                "llm_model": selected_model or "",
             })
             st.rerun()
         else:
             payload = {"session_id": st.session_state.session_id, "query": query,
-                       "top_k": top_k, "use_mmr": use_mmr, "use_reranking": use_rerank}
+                       "top_k": top_k, "use_mmr": use_mmr, "use_reranking": use_rerank,
+                       **({"llm_model": selected_model} if selected_model else {})}
             with st.spinner("Generating answer…"):
                 try:
                     r = requests.post(f"{BACKEND}/chat", json=payload, timeout=180)
@@ -297,6 +331,7 @@ with tab_chat:
                         "content": data["answer"],
                         "sources": data["sources"],
                         "metrics": data["metrics"],
+                        "llm_model": data.get("llm_model", selected_model or ""),
                     })
                 except Exception as e:
                     st.session_state.chat.append({"role": "assistant", "content": f"Error: {e}", "sources": [], "metrics": {}})
@@ -329,7 +364,8 @@ with tab_tests:
         with st.spinner(f"Running {q_set} test suite (this may take 1-2 minutes)…"):
             try:
                 payload = {"session_id": st.session_state.session_id, "question_set": q_set,
-                           "top_k": top_k, "use_reranking": use_rerank}
+                           "top_k": top_k, "use_reranking": use_rerank,
+                           **({"llm_model": selected_model} if selected_model else {})}
                 r = requests.post(f"{BACKEND}/test-suite", json=payload, timeout=600)
                 r.raise_for_status()
                 result = r.json()

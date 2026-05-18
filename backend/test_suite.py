@@ -182,6 +182,7 @@ def run_test_suite(
     session_id: str,
     top_k: int = 5,
     use_reranking: bool = False,
+    llm_model: str = None,
 ) -> Dict[str, Any]:
     """
     Run all 5 questions from the selected set through the full pipeline.
@@ -210,7 +211,7 @@ def run_test_suite(
         print(f"[TestSuite] Running Q{q['id']}: {q['question'][:60]}...")
         try:
             chunks = retrieve(q["question"], session_id, top_k=top_k, use_reranking=use_reranking)
-            answer = generate(q["question"], chunks)
+            answer = generate(q["question"], chunks, model=llm_model)
             metrics = evaluate(q["question"], answer, chunks)
             khr = compute_keyword_hit_rate(answer, q["expected_keywords"])
 

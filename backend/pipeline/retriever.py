@@ -23,7 +23,7 @@ from langchain_core.documents import Document
 
 import config
 from pipeline.embeddings import embed_query
-from pipeline.vector_store import similarity_search
+from pipeline.vector_store import similarity_search, similarity_search_filtered, get_stats
 
 
 # ── MMR Reranking ──────────────────────────────────────────────────────────────
@@ -32,11 +32,16 @@ def _mmr_rerank(
     candidates: List[Tuple[Document, float]],
     top_k: int,
     lambda_: float,
+    source_diversity_bonus: float = 0.15,
 ) -> List[Tuple[Document, float]]:
     """
-    Maximal Marginal Relevance reranking.
-    MMR(i) = λ·rel(q,dᵢ) - (1-λ)·max_j sim(dᵢ,dⱼ)
-    Approximates inter-doc similarity via retrieval score proximity.
+    Maximal Marginal Relevance reranking with source-diversity bonus.
+
+    MMR(i) = λ·rel(q,dᵢ) - (1-λ)·redundancy + bonus_if_new_source
+
+    The source_diversity_bonus rewards picking a chunk from a document that
+    hasn't been represented yet, ensuring multi-PDF sessions surface content
+    from every uploaded file rather than clustering on the highest-scoring one.
     """
     if len(candidates) <= top_k:
         return candidates
@@ -49,10 +54,16 @@ def _mmr_rerank(
             best = max(remaining, key=lambda x: x[1])
         else:
             sel_scores = [s for _, s in selected]
+            sel_sources = {doc.metadata.get("source_file", "") for doc, _ in selected}
             best, best_score = None, -float("inf")
             for doc, rel in remaining:
                 redundancy = max(1 - abs(rel - s) for s in sel_scores)
-                mmr_score = lambda_ * rel - (1 - lambda_) * redundancy
+                new_source = doc.metadata.get("source_file", "") not in sel_sources
+                mmr_score = (
+                    lambda_ * rel
+                    - (1 - lambda_) * redundancy
+                    + (source_diversity_bonus if new_source else 0.0)
+                )
                 if mmr_score > best_score:
                     best_score, best = mmr_score, (doc, rel)
         if best:
@@ -160,7 +171,27 @@ def retrieve(
     if apply_reranking and results:
         results = _cross_encoder_rerank(query, results)
 
+    # Step 6: Multi-PDF coverage guarantee
+    # If multiple files were uploaded, ensure every document contributes at
+    # least one chunk so the LLM can synthesise across all sources.
+    session_files = set(get_stats(session_id).get("files", []))
+    if len(session_files) > 1:
+        covered = {r["metadata"].get("source_file") for r in results}
+        missing = session_files - covered
+        for src in missing:
+            extra = similarity_search_filtered(query_emb, session_id, src, top_k=1)
+            if extra:
+                doc, score = extra[0]
+                results.append({
+                    "content": doc.page_content,
+                    "score": round(score, 4),
+                    "metadata": doc.metadata,
+                })
+                print(f"[Retriever] Added coverage chunk from '{src}' (score={score:.4f})")
+
     print(f"[Retriever] Returning {len(results)} chunks "
           f"(MMR={'on' if use_mmr else 'off'}, "
-          f"reranking={'on' if apply_reranking else 'off'})")
+          f"reranking={'on' if apply_reranking else 'off'}, "
+          f"docs_covered={len({r['metadata'].get('source_file') for r in results})}/"
+          f"{len(session_files)})")
     return results

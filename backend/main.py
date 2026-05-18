@@ -58,6 +58,7 @@ class ChatRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
     use_mmr: bool = True
     use_reranking: bool = False
+    llm_model: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -66,6 +67,7 @@ class ChatResponse(BaseModel):
     metrics: dict
     session_id: str
     query: str
+    llm_model: str
 
 
 class TestSuiteRequest(BaseModel):
@@ -73,6 +75,7 @@ class TestSuiteRequest(BaseModel):
     question_set: str = "Generic"
     top_k: int = Field(default=5, ge=1, le=10)
     use_reranking: bool = False
+    llm_model: Optional[str] = None
 
 
 class UploadResponse(BaseModel):
@@ -90,6 +93,12 @@ def health():
         "embedding": config.EMBEDDING_MODEL,
         "llm": config.LLM_MODEL,
     }}
+
+
+@app.get("/models")
+def get_models():
+    """Return available LLM models and the current default."""
+    return {"models": config.AVAILABLE_MODELS, "default": config.LLM_MODEL}
 
 
 # ── Upload Endpoint ────────────────────────────────────────────────────────────
@@ -162,6 +171,7 @@ def chat(req: ChatRequest):
     if stats["chunk_count"] == 0:
         raise HTTPException(status_code=404, detail=f"Session '{req.session_id}' not found or empty. Please upload documents first.")
 
+    active_model = req.llm_model or config.LLM_MODEL
     try:
         chunks = retrieve(
             query=req.query,
@@ -170,7 +180,7 @@ def chat(req: ChatRequest):
             use_mmr=req.use_mmr,
             use_reranking=req.use_reranking,
         )
-        answer = generate(req.query, chunks)
+        answer = generate(req.query, chunks, model=active_model)
         metrics = evaluate(req.query, answer, chunks)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -192,6 +202,7 @@ def chat(req: ChatRequest):
         metrics=metrics,
         session_id=req.session_id,
         query=req.query,
+        llm_model=active_model,
     )
 
 
@@ -204,6 +215,7 @@ def chat_stream(
     top_k: int = 5,
     use_mmr: bool = True,
     use_reranking: bool = False,
+    llm_model: Optional[str] = None,
 ):
     """
     [Bonus] Streaming chat via Server-Sent Events.
@@ -212,6 +224,8 @@ def chat_stream(
     stats = get_stats(session_id)
     if stats["chunk_count"] == 0:
         raise HTTPException(status_code=404, detail="Session not found or empty.")
+
+    active_model = llm_model or config.LLM_MODEL
 
     def event_stream():
         try:
@@ -230,7 +244,7 @@ def chat_stream(
 
             # Stream tokens
             full_answer = ""
-            for token in generate_stream(query, chunks):
+            for token in generate_stream(query, chunks, model=active_model):
                 full_answer += token
                 yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
 
@@ -269,6 +283,7 @@ def run_tests(req: TestSuiteRequest):
             session_id=req.session_id,
             top_k=req.top_k,
             use_reranking=req.use_reranking,
+            llm_model=req.llm_model,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

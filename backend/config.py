@@ -31,6 +31,30 @@ DO_SAMPLE: bool = True
 # ── Bonus Features ─────────────────────────────────────────
 ENABLE_RERANKING: bool = os.getenv("ENABLE_RERANKING", "false").lower() == "true"
 
+# ── Available LLM models (HF Serverless Inference) ─────────
+AVAILABLE_MODELS = [
+    {
+        "id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "label": "DeepSeek-R1 7B",
+        "description": "Chain-of-thought reasoning · thorough, cited answers",
+    },
+    {
+        "id": "mistralai/Mistral-7B-Instruct-v0.3",
+        "label": "Mistral 7B",
+        "description": "Fast & concise · good all-round instruction following",
+    },
+    {
+        "id": "Qwen/Qwen2.5-7B-Instruct",
+        "label": "Qwen 2.5 7B",
+        "description": "Strong multilingual support · good for non-English docs",
+    },
+    {
+        "id": "microsoft/Phi-3.5-mini-instruct",
+        "label": "Phi-3.5 Mini",
+        "description": "Smallest & fastest · great for quick lookups",
+    },
+]
+
 # ── Storage ────────────────────────────────────────────────
 CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
 UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./data/uploads")
