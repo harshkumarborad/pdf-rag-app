@@ -10,28 +10,19 @@ BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 @st.cache_data(ttl=300)
 def fetch_models() -> list:
-    """Fetch available LLM models from the backend. Cached for 5 min."""
-    try:
-        r = requests.get(f"{BACKEND}/models", timeout=10)
-        r.raise_for_status()
-        return r.json().get("models", [])
-    except Exception:
-        return []
+    """Fetch available LLM models from the backend. Raises on failure so cache stays empty."""
+    r = requests.get(f"{BACKEND}/models", timeout=10)
+    r.raise_for_status()
+    return r.json().get("models", [])
 
 
 @st.cache_data(ttl=300)
 def fetch_question_sets() -> dict:
-    """Fetch the full question-set catalog from the backend.
-    Cached so we don't hit the API on every rerun. Returns {} on failure
-    so the Test Suite tab degrades gracefully.
-    """
-    try:
-        r = requests.get(f"{BACKEND}/question-sets", timeout=10)
-        r.raise_for_status()
-        sets = r.json().get("sets", {})
-        return sets if isinstance(sets, dict) else {}
-    except Exception:
-        return {}
+    """Fetch the full question-set catalog from the backend. Raises on failure so cache stays empty."""
+    r = requests.get(f"{BACKEND}/question-sets", timeout=10)
+    r.raise_for_status()
+    sets = r.json().get("sets", {})
+    return sets if isinstance(sets, dict) else {}
 
 st.set_page_config(page_title="RAG Document Chat | Agentur Philipp GmbH",
                    page_icon="📄", layout="wide")
@@ -105,8 +96,15 @@ for k, v in {"session_id": None, "chat": [], "stats": {}, "streaming": True}.ite
     if k not in st.session_state:
         st.session_state[k] = v
 
-QUESTION_SETS = fetch_question_sets()
-AVAILABLE_MODELS = fetch_models()
+try:
+    QUESTION_SETS = fetch_question_sets()
+except Exception:
+    QUESTION_SETS = {}
+
+try:
+    AVAILABLE_MODELS = fetch_models()
+except Exception:
+    AVAILABLE_MODELS = []
 
 # ── Sidebar ───────────────────────────────────────────────────
 with st.sidebar:
@@ -117,6 +115,16 @@ with st.sidebar:
       <div style='font-size:.62rem;color:#5a7d9a;letter-spacing:.1em;text-transform:uppercase;margin-top:2px'>RAG Document Chat</div>
       <div style='width:32px;height:2px;background:#457b9d;border-radius:2px;margin:10px auto 0'></div>
     </div>""", unsafe_allow_html=True)
+
+    # ── Backend status ────────────────────────────────────
+    backend_ok = bool(AVAILABLE_MODELS or QUESTION_SETS)
+    if backend_ok:
+        st.markdown("<div style='font-size:.72rem;color:#4ade80;margin-bottom:8px'>● Backend connected</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='font-size:.72rem;color:#f87171;margin-bottom:4px'>● Backend unreachable</div>", unsafe_allow_html=True)
+        if st.button("🔄 Retry connection", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
     st.markdown("#### 📤 Upload Documents")
     uploaded = st.file_uploader("Select PDF files", type=["pdf"],
@@ -364,7 +372,10 @@ with tab_tests:
                 "Select a question set that matches your document type.")
 
     if not QUESTION_SETS:
-        st.warning("Could not load question sets from the backend. Make sure the backend container is running.")
+        st.warning("Could not reach the backend. Click **Retry connection** in the sidebar, then wait ~30 s for the backend to warm up.")
+        if st.button("🔄 Retry now", key="retry_qs"):
+            st.cache_data.clear()
+            st.rerun()
         q_set = None
         run_tests = False
     else:
