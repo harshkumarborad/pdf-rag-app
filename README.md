@@ -6,6 +6,13 @@
 
 ---
 
+## Live Demo
+
+| Service | URL |
+|---------|-----|
+| **Frontend (Streamlit)** | https://pdf-rag-app-production-0b80.up.railway.app |
+| **Backend API (FastAPI)** | https://pdf-rag-app-production-c25d.up.railway.app/docs |
+
 ## Quick Start
 
 ```bash
