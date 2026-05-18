@@ -51,8 +51,8 @@ AVAILABLE_MODELS = [
         "description": "Strong multilingual support · good for non-English docs",
     },
     {
-        "id": "meta-llama/Llama-3.2-3B-Instruct",
-        "label": "Llama 3.2 3B",
+        "id": "Qwen/Qwen2.5-3B-Instruct",
+        "label": "Qwen 2.5 3B",
         "description": "Smallest & fastest · great for quick lookups",
     },
 ]
