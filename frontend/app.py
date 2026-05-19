@@ -131,20 +131,48 @@ with st.sidebar:
                                  accept_multiple_files=True, label_visibility="collapsed")
 
     if uploaded and st.button("🚀 Index Documents", use_container_width=True):
-        total_mb = sum(f.size for f in uploaded) / (1024 * 1024)
-        eta_msg = f"~{max(1, int(total_mb * 1.5))}–{max(2, int(total_mb * 3))} min" if total_mb > 1 else "~30 s"
-        with st.spinner(f"Uploading & indexing ({total_mb:.1f} MB) — embedding via HF API takes {eta_msg} for large PDFs…"):
-            try:
-                files = [("files", (f.name, f.read(), "application/pdf")) for f in uploaded]
-                r = requests.post(f"{BACKEND}/upload", files=files, timeout=1200)
+        try:
+            files_data = [("files", (f.name, f.read(), "application/pdf")) for f in uploaded]
+            with st.spinner("Sending files to backend…"):
+                r = requests.post(f"{BACKEND}/upload", files=files_data, timeout=60)
                 r.raise_for_status()
                 data = r.json()
-                st.session_state.session_id = data["session_id"]
-                st.session_state.stats = data
-                st.session_state.chat = []
-                st.success(f"✅ {data['total_chunks']} chunks indexed!")
-            except Exception as e:
-                st.error(f"Upload failed: {e}")
+                sid = data["session_id"]
+
+            # Poll /sessions/{id}/status until indexing finishes
+            progress_box = st.empty()
+            start = time.time()
+            while True:
+                try:
+                    sr = requests.get(f"{BACKEND}/sessions/{sid}/status", timeout=10)
+                    info = sr.json()
+                except Exception:
+                    info = {"status": "indexing"}
+
+                status = info.get("status", "indexing")
+                elapsed = int(time.time() - start)
+
+                if status == "ready":
+                    chunks = info.get("total_chunks", "?")
+                    st.session_state.session_id = sid
+                    st.session_state.stats = {
+                        "session_id": sid,
+                        "total_chunks": chunks,
+                        "files": info.get("files", [f[1][0] for f in files_data]),
+                    }
+                    st.session_state.chat = []
+                    progress_box.success(f"✅ {chunks} chunks indexed from {len(uploaded)} file(s)!")
+                    time.sleep(1)
+                    st.rerun()
+                    break
+                elif status == "failed":
+                    progress_box.error(f"❌ Indexing failed: {info.get('error', 'Unknown error')}")
+                    break
+                else:
+                    progress_box.info(f"⏳ Indexing… {elapsed}s elapsed — large PDFs may take a few minutes.")
+                    time.sleep(4)
+        except Exception as e:
+            st.error(f"Upload failed: {e}")
 
     if st.session_state.session_id:
         st.markdown("---")
@@ -167,8 +195,8 @@ with st.sidebar:
             selected_model = None
 
         top_k = st.slider("Chunks to retrieve (Top-K)", 3, 10, 5)
-        max_tokens = st.slider("Max answer length (tokens)", 256, 1024, 512, step=128,
-                               help="Min 256 recommended. DeepSeek-R1 needs 512+ for CoT + answer.")
+        max_tokens = st.slider("Max answer length (tokens)", 256, 1536, 768, step=128,
+                               help="DeepSeek-R1 uses 300–600 tokens for reasoning before the answer. 768 is the safe minimum.")
         use_mmr = st.toggle("MMR Diversity", value=True)
         use_rerank = st.toggle("Cross-Encoder Re-ranking ✨", value=False,
                                help="Bonus: Re-ranks chunks with a cross-encoder before generation")
@@ -191,7 +219,7 @@ with st.sidebar:
             st.session_state.stats = {}
             st.rerun()
     else:
-        top_k, max_tokens, use_mmr, use_rerank, selected_model = 5, 512, True, False, None
+        top_k, max_tokens, use_mmr, use_rerank, selected_model = 5, 768, True, False, None
 
 # ── Hero ──────────────────────────────────────────────────────
 st.markdown("""

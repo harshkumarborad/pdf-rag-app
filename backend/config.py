@@ -24,7 +24,7 @@ TOP_K: int = int(os.getenv("TOP_K", "5"))
 MMR_LAMBDA: float = float(os.getenv("MMR_LAMBDA", "0.6"))
 
 # ── Generation ─────────────────────────────────────────────
-MAX_NEW_TOKENS: int = int(os.getenv("MAX_NEW_TOKENS", "512"))
+MAX_NEW_TOKENS: int = int(os.getenv("MAX_NEW_TOKENS", "1024"))
 TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.2"))
 DO_SAMPLE: bool = True
 

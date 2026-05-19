@@ -17,7 +17,7 @@ from huggingface_hub import InferenceClient
 import config
 
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 MAX_RETRIES = 5
 
 _client: InferenceClient | None = None
@@ -61,8 +61,6 @@ def embed_documents(texts: List[str]) -> List[List[float]]:
         batch = texts[i: i + BATCH_SIZE]
         embeddings = _embed_batch(batch)
         all_embeddings.extend(embeddings)
-        if i + BATCH_SIZE < len(texts):
-            time.sleep(0.3)
     return all_embeddings
 
 def embed_query(query: str) -> List[float]:
