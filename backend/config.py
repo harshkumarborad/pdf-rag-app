@@ -37,23 +37,43 @@ ENABLE_RERANKING: bool = os.getenv("ENABLE_RERANKING", "false").lower() == "true
 AVAILABLE_MODELS = [
     {
         "id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-        "label": "DeepSeek-R1 7B",
-        "description": "Chain-of-thought reasoning · thorough, cited answers",
+        "label": "DeepSeek-R1 7B (default)",
+        "description": "Chain-of-thought reasoning · thorough cited answers · confirmed on free tier",
+    },
+    {
+        "id": "Qwen/Qwen3-8B",
+        "label": "Qwen 3 8B ⭐ new",
+        "description": "Latest Qwen · outscores DeepSeek-R1 7B · native thinking mode · best multilingual",
+    },
+    {
+        "id": "Qwen/Qwen2.5-72B-Instruct",
+        "label": "Qwen 2.5 72B (large)",
+        "description": "Largest model · richest answers · significantly slower",
+    },
+    {
+        "id": "mistralai/Mistral-Nemo-Instruct-2407",
+        "label": "Mistral Nemo 12B",
+        "description": "12B params · excellent European language support · great for German/French",
+    },
+    {
+        "id": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+        "label": "Llama 3.1 8B",
+        "description": "Meta flagship small model · fast · well-tested · good English answers",
     },
     {
         "id": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
         "label": "DeepSeek-R1 Llama 8B",
-        "description": "Llama-based distill · slightly more concise than Qwen variant",
+        "description": "Llama-based R1 distill · slightly more concise than Qwen variant",
     },
     {
         "id": "Qwen/Qwen2.5-7B-Instruct",
         "label": "Qwen 2.5 7B",
-        "description": "Strong multilingual support · good for non-English docs",
+        "description": "Solid multilingual · good fallback if Qwen3 unavailable",
     },
     {
         "id": "Qwen/Qwen2.5-3B-Instruct",
-        "label": "Qwen 2.5 3B",
-        "description": "Smallest & fastest · great for quick lookups",
+        "label": "Qwen 2.5 3B (fastest)",
+        "description": "Smallest & fastest · best for quick lookups",
     },
 ]
 

@@ -88,9 +88,13 @@ def _strip_cot(text: str) -> str:
 
 
 def _token_limit(model: str, requested: int) -> int:
-    """Ensure CoT models always have enough budget for the actual answer."""
-    is_cot = "deepseek" in model.lower() or "r1" in model.lower()
-    # DeepSeek-R1 uses 300–600 tokens for <think>; enforce minimum headroom
+    """Ensure CoT models always have enough budget for the actual answer.
+
+    Both DeepSeek-R1 and Qwen3 emit <think>...</think> blocks that consume
+    300–600 tokens before the actual answer begins.
+    """
+    m = model.lower()
+    is_cot = "deepseek" in m or "r1" in m or "qwen3" in m
     return max(requested, 768) if is_cot else requested
 
 
