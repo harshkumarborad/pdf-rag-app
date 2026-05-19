@@ -10,7 +10,7 @@
 
 | Service | URL |
 |---------|-----|
-| **Frontend (Streamlit)** | https://pdf-rag-app-production-0b80.up.railway.app |
+| **Frontend (Streamlit)** | https://rag-document-chat.up.railway.app/ |
 | **Backend API + Docs** | https://pdf-rag-app-production-c25d.up.railway.app/docs |
 
 ---
