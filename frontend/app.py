@@ -348,7 +348,12 @@ with tab_chat:
                                 tok = json.loads(data).get("token", "")
                                 if not tok:
                                     continue
-                                full_answer += tok
+                                # RESET signal: model wrote a draft then **Answer:**
+                                # — discard the draft and start fresh
+                                if tok.startswith("\x00RESET\x00"):
+                                    full_answer = tok[len("\x00RESET\x00"):]
+                                else:
+                                    full_answer += tok
                                 placeholder.markdown(
                                     f"<div class='chat-ai'>"
                                     f"<div class='label label-ai'>Agentur Philipp RAG · DeepSeek-R1 · streaming</div>"

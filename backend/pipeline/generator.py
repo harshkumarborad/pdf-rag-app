@@ -60,22 +60,31 @@ def _build_prompt(query: str, chunks: List[Dict[str, Any]]) -> str:
 
 
 def _strip_cot(text: str) -> str:
-    """Remove DeepSeek-R1 <think>...</think> blocks.
+    """Remove DeepSeek-R1 <think>...</think> blocks and deduplicate preamble/answer.
 
-    Falls back gracefully when:
-    - The block is unclosed (token limit hit mid-reasoning)
-    - Stripping leaves nothing (entire budget used on CoT)
+    DeepSeek-R1 sometimes writes a draft paragraph outside <think>, then adds
+    a separator and '**Answer:**' with the polished version. We keep only the
+    final answer section when that pattern is detected.
     """
-    # Remove complete think blocks
+    # 1. Remove complete <think>...</think> blocks
     stripped = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-    if stripped:
-        return stripped
 
-    # Unclosed <think> block — return empty so caller can retry or fallback
-    if "<think>" in text and "</think>" not in text:
+    # Unclosed <think> block (token limit hit mid-reasoning) → signal retry
+    if not stripped and "<think>" in text and "</think>" not in text:
         return ""
 
-    return text.strip()
+    result = stripped if stripped else text.strip()
+
+    # 2. If model wrote "draft ... --- **Answer:** final", keep only the final part
+    answer_match = re.search(
+        r"(?:---+\s*)?\*\*Answer:\*\*\s*(.+)",
+        result,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if answer_match and answer_match.group(1).strip():
+        result = answer_match.group(1).strip()
+
+    return result
 
 
 def _token_limit(model: str, requested: int) -> int:
@@ -164,6 +173,8 @@ def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None,
     post_think = False   # True once we've passed </think>
     in_think = False     # True while we're inside a <think> block
     got_answer = False
+    # Accumulated output after think block — used to detect draft+answer pattern
+    output_so_far = ""
 
     try:
         resp = client.chat_completion(
@@ -184,6 +195,20 @@ def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None,
 
             # Fast path: past the think block, stream every token directly
             if post_think:
+                output_so_far += token
+
+                # Detect "draft --- **Answer:** final" pattern mid-stream.
+                # When we see **Answer:** reset everything already sent and
+                # start fresh (the placeholder in the UI will overwrite anyway).
+                if "**Answer:**" in output_so_far or "**answer:**" in output_so_far:
+                    marker = "**Answer:**" if "**Answer:**" in output_so_far else "**answer:**"
+                    _, _, clean = output_so_far.partition(marker)
+                    # Yield a reset token so the frontend replaces its buffer
+                    got_answer = True
+                    yield "\x00RESET\x00" + clean.lstrip()
+                    output_so_far = clean.lstrip()
+                    continue
+
                 got_answer = True
                 yield token
                 continue
@@ -197,13 +222,14 @@ def generate_stream(query: str, chunks: List[Dict[str, Any]], model: str = None,
                 in_think = False
                 buffer = ""
                 if after:
+                    output_so_far = after
                     got_answer = True
                     yield after
             elif "<think>" in buffer:
                 in_think = True
-                # Suppressing — don't yield anything inside think block
             else:
-                # No think block present — yield buffer contents immediately
+                # No think block — yield immediately
+                output_so_far += buffer
                 got_answer = True
                 yield buffer
                 buffer = ""
