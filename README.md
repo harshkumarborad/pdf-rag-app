@@ -98,7 +98,7 @@ pdf-rag-app/
 | `POST` | `/upload` | Save PDFs, start background indexing, return `session_id` immediately |
 | `GET`  | `/sessions/{id}/status` | Poll indexing progress (`indexing` → `ready` → `failed`) |
 | `POST` | `/chat` | Query → answer + sources + evaluation metrics |
-| `GET`  | `/chat/stream` | ✨ Same as `/chat` but streams tokens via Server-Sent Events |
+| `GET`  | `/chat/stream` | Same as `/chat` but streams tokens via Server-Sent Events |
 | `POST` | `/test-suite` | Run 5 hardcoded domain questions, return per-question scores |
 | `GET`  | `/question-sets` | Fetch question catalogue (single source of truth) |
 | `GET`  | `/models` | Fetch available LLM model list |
@@ -129,7 +129,7 @@ pdf-rag-app/
 | **LLM (default)** | `DeepSeek-R1-Distill-Qwen-7B` | Chain-of-thought reasoning, free HF serverless tier |
 | **Vector Store** | ChromaDB (HNSW, cosine) | Zero-config, session-isolated collections |
 | **Retrieval** | MMR (λ=0.6) + coverage guarantee | Diversity + every uploaded document is represented |
-| **Re-ranking ✨** | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Optional; sees query+doc together → higher precision |
+| **Re-ranking** | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Optional; sees query+doc together → higher precision |
 | **Backend** | FastAPI + Uvicorn | Async, auto OpenAPI docs at `/docs` |
 | **Frontend** | Streamlit | Chat · Test Suite · About tabs |
 | **Deployment** | Docker Compose / Railway | Single-command local start |
@@ -143,7 +143,7 @@ Select the model from the sidebar dropdown. All are served via the HuggingFace I
 | Model | Speed | Best for |
 |-------|-------|---------|
 | **DeepSeek-R1 7B** *(default)* | Medium | Thorough, cited answers; confirmed on free tier |
-| **Qwen 3 8B** ⭐ | Medium | Latest (Apr 2025); outscores DeepSeek-R1 7B; best multilingual |
+| **Qwen 3 8B** | Medium | Latest (Apr 2025); outscores DeepSeek-R1 7B; best multilingual |
 | **Qwen 2.5 72B** | Slow | Richest answers; best quality; 2–3× longer wait |
 | **Mistral Nemo 12B** | Medium | European language support (German, French, etc.) |
 | **Llama 3.1 8B** | Fast | Meta flagship; well-tested; good English answers |
@@ -162,12 +162,10 @@ Select the model from the sidebar dropdown. All are served via the HuggingFace I
 - **Language-aware answers** — the LLM detects the question language and responds in the same language (ask in German → get a German answer)
 - **Session isolation** — each upload gets its own ChromaDB collection; multiple users don't interfere
 - **Source citations** — every answer shows file name, page number, excerpt, and similarity score for each retrieved chunk
-
-### Bonus
-- ✨ **Real streaming** — `GET /chat/stream` produces Server-Sent Events; the Streamlit chat tab renders tokens live with a typing cursor
-- ✨ **Cross-encoder re-ranking** — optional toggle in sidebar; re-ranks MMR results with a cross-encoder before the LLM call (~5-8% precision gain)
-- ✨ **Domain-aware test suite** — 5 question sets (Generic, Legal/Regulatory, Technical, Business, HR/Recruitment); runs all 5 questions and returns per-question scores plus aggregate summary
-- ✨ **Model selector** — choose from 8 models without restarting; model shown on each chat bubble
+- **Real streaming** — `GET /chat/stream` produces Server-Sent Events; the Streamlit chat tab renders tokens live with a typing cursor
+- **Cross-encoder re-ranking** — optional toggle in sidebar; re-ranks MMR results with a cross-encoder before the LLM call (~5-8% precision gain)
+- **Domain-aware test suite** — 5 question sets (Generic, Legal/Regulatory, Technical, Business, HR/Recruitment); runs all 5 questions and returns per-question scores plus aggregate summary
+- **Model selector** — choose from 8 models without restarting; model shown on each chat bubble
 
 ### Production hardening
 - **Async background indexing** — `/upload` returns in < 1 s; embedding runs in a background thread; frontend polls `/sessions/{id}/status` with a live counter
