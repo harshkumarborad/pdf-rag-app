@@ -26,7 +26,6 @@ MMR_LAMBDA: float = float(os.getenv("MMR_LAMBDA", "0.6"))
 # ── Generation ─────────────────────────────────────────────
 MAX_NEW_TOKENS: int = int(os.getenv("MAX_NEW_TOKENS", "1024"))
 TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.2"))
-DO_SAMPLE: bool = True
 
 # ── Bonus Features ─────────────────────────────────────────
 ENABLE_RERANKING: bool = os.getenv("ENABLE_RERANKING", "false").lower() == "true"

@@ -11,7 +11,7 @@ COPY . .
 
 # Streamlit config: disable telemetry, set port
 RUN mkdir -p /root/.streamlit
-RUN echo '[server]\nport = 8501\nheadless = true\nenableXsrfProtection = false\n[browser]\ngatherUsageStats = false\n[theme]\nbase = "light"\nbackgroundColor = "#f8fafc"\nfont = "sans serif"' > /root/.streamlit/config.toml
+RUN printf '[server]\nport = 8501\nheadless = true\nenableXsrfProtection = false\n[browser]\ngatherUsageStats = false\n[theme]\nbase = "light"\nbackgroundColor = "#f8fafc"\nfont = "sans serif"\n' > /root/.streamlit/config.toml
 
 EXPOSE 8501
 

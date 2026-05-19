@@ -15,6 +15,8 @@ Endpoints:
 import os
 import uuid
 import shutil
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -32,25 +34,33 @@ from pipeline.generator import generate, generate_stream
 from pipeline.evaluator import evaluate
 from test_suite import run_test_suite, QUESTION_SETS
 
+# ── In-memory session status (survives page reloads, lost on restart) ──────────
+# Keys: session_id → {status, total_chunks, files, error}
+# Lock protects concurrent reads/writes from background indexing threads.
+_sessions: Dict[str, Dict[str, Any]] = {}
+_sessions_lock = threading.Lock()
+
+
 # ── App Setup ──────────────────────────────────────────────────────────────────
 
-app = FastAPI(
-    title="RAG Document Chat API",
-    description="Upload PDFs and chat with them using DeepSeek-R1 + BGE embeddings.",
-    version="1.0.0",
-)
-
-
-@app.on_event("startup")
-async def warmup():
-    """Ping the embedding model on boot so the first user request skips cold-start."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Warm up the embedding model on startup to reduce first-request latency."""
     from pipeline.embeddings import embed_query
     try:
         embed_query("warmup")
         print("[Warmup] Embedding model ready.")
     except Exception as e:
         print(f"[Warmup] Embedding warmup failed (non-fatal): {e}")
+    yield
 
+
+app = FastAPI(
+    title="RAG Document Chat API",
+    description="Upload PDFs and chat with them using DeepSeek-R1 + BGE embeddings.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,10 +71,6 @@ app.add_middleware(
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
 os.makedirs(config.CHROMA_PERSIST_DIR, exist_ok=True)
-
-# ── In-memory session status (survives page reloads, lost on restart) ──────────
-# Keys: session_id → {status, total_chunks, files, error}
-_sessions: Dict[str, Dict[str, Any]] = {}
 
 
 # ── Request / Response Models ──────────────────────────────────────────────────
@@ -130,21 +136,24 @@ def _index_in_background(session_id: str, saved_paths: List[str]):
         print(f"[Indexing] Starting background index for session {session_id}")
         chunks = ingest_files(saved_paths)
         if not chunks:
-            _sessions[session_id].update({
-                "status": "failed",
-                "error": (
-                    "No text could be extracted. The PDF(s) appear to be scanned or "
-                    "image-based. Please upload PDFs with selectable text, or run OCR "
-                    "(e.g. ocrmypdf) on them first."
-                ),
-            })
+            with _sessions_lock:
+                _sessions[session_id].update({
+                    "status": "failed",
+                    "error": (
+                        "No text could be extracted. The PDF(s) appear to be scanned or "
+                        "image-based. Please upload PDFs with selectable text, or run OCR "
+                        "(e.g. ocrmypdf) on them first."
+                    ),
+                })
             return
         total = add_documents(chunks, session_id)
-        _sessions[session_id].update({"status": "ready", "total_chunks": total})
+        with _sessions_lock:
+            _sessions[session_id].update({"status": "ready", "total_chunks": total})
         print(f"[Indexing] Session {session_id} ready — {total} chunks")
     except Exception as e:
         print(f"[Indexing] Session {session_id} failed: {e}")
-        _sessions[session_id].update({"status": "failed", "error": str(e)})
+        with _sessions_lock:
+            _sessions[session_id].update({"status": "failed", "error": str(e)})
 
 
 # ── Upload Endpoint ────────────────────────────────────────────────────────────
@@ -198,12 +207,13 @@ async def upload_pdfs(
         filenames.append(filename)
 
     # Register session as "indexing" before kicking off background task
-    _sessions[session_id] = {
-        "status": "indexing",
-        "total_chunks": 0,
-        "files": filenames,
-        "error": None,
-    }
+    with _sessions_lock:
+        _sessions[session_id] = {
+            "status": "indexing",
+            "total_chunks": 0,
+            "files": filenames,
+            "error": None,
+        }
     background_tasks.add_task(_index_in_background, session_id, saved_paths)
 
     return UploadResponse(
@@ -226,8 +236,9 @@ def session_status(session_id: str):
     Returns indexing progress. Frontend polls this after /upload.
     Possible statuses: indexing | ready | failed | unknown
     """
-    if session_id in _sessions:
-        return _sessions[session_id]
+    with _sessions_lock:
+        if session_id in _sessions:
+            return dict(_sessions[session_id])
     # Fallback: session pre-dates this server restart but ChromaDB may have data
     stats = get_stats(session_id)
     if stats["chunk_count"] > 0:
@@ -244,7 +255,8 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
     # Check indexing state first
-    sess = _sessions.get(req.session_id, {})
+    with _sessions_lock:
+        sess = dict(_sessions.get(req.session_id, {}))
     if sess.get("status") == "indexing":
         raise HTTPException(
             status_code=202,
@@ -310,7 +322,8 @@ def chat_stream(
     llm_model: Optional[str] = None,
     max_tokens: Optional[int] = None,
 ):
-    sess = _sessions.get(session_id, {})
+    with _sessions_lock:
+        sess = dict(_sessions.get(session_id, {}))
     if sess.get("status") == "indexing":
         raise HTTPException(status_code=202,
                             detail="Documents are still being indexed.")
@@ -365,7 +378,8 @@ def run_tests(req: TestSuiteRequest):
             detail=f"Unknown question set '{req.question_set}'. Available: {list(QUESTION_SETS.keys())}"
         )
 
-    sess = _sessions.get(req.session_id, {})
+    with _sessions_lock:
+        sess = dict(_sessions.get(req.session_id, {}))
     if sess.get("status") == "indexing":
         raise HTTPException(status_code=202, detail="Documents are still being indexed.")
 
@@ -413,7 +427,8 @@ def clear_session(session_id: str):
     session_dir = Path(config.UPLOAD_DIR) / session_id
     if session_dir.exists():
         shutil.rmtree(session_dir)
-    _sessions.pop(session_id, None)
+    with _sessions_lock:
+        _sessions.pop(session_id, None)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found.")
     return {"message": f"Session '{session_id}' deleted.", "session_id": session_id}

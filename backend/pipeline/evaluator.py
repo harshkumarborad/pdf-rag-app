@@ -31,17 +31,15 @@ def _jaccard(a: set, b: set) -> float:
 
 
 def compute_context_relevancy(query: str, chunks: List[Dict[str, Any]]) -> float:
-    """Bigram Jaccard between query and each retrieved chunk, weighted by score."""
+    """Query-precision: fraction of query bigrams (or unigrams) found in retrieved chunks."""
     q_tokens = _tokenize(query)
     q_bg = _ngrams(q_tokens, 2) or _ngrams(q_tokens, 1)
     if not q_bg or not chunks:
         return 0.0
-    scores = []
-    for c in chunks:
-        c_bg = _ngrams(_tokenize(c["content"]), 2) or _ngrams(_tokenize(c["content"]), 1)
-        scores.append(_jaccard(q_bg, c_bg) * c.get("score", 1.0))
-    total_w = sum(c.get("score", 1.0) for c in chunks) or 1.0
-    return min(1.0, sum(scores) / total_w * 15)
+    # Combine all chunk text so we measure coverage across the full context window
+    ctx_tokens = _tokenize(" ".join(c["content"] for c in chunks))
+    ctx_bg = _ngrams(ctx_tokens, 2) or _ngrams(ctx_tokens, 1)
+    return round(len(q_bg & ctx_bg) / len(q_bg), 4)
 
 
 def compute_faithfulness(answer: str, chunks: List[Dict[str, Any]]) -> float:
