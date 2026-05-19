@@ -73,7 +73,8 @@ def add_documents(chunks: List[Dict[str, Any]], session_id: str) -> int:
 
     texts = [c["content"] for c in chunks]
     metadatas = [c["metadata"] for c in chunks]
-    ids = [f"{session_id}_{i}" for i in range(len(chunks))]
+    offset = collection.count()
+    ids = [f"{session_id}_{offset + i}" for i in range(len(chunks))]
 
     print(f"[VectorStore] Embedding {len(texts)} chunks...")
     embeddings = embed_documents(texts)

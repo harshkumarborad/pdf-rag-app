@@ -3,7 +3,7 @@ pipeline/embeddings.py — HuggingFace BGE Embeddings
 ====================================================
 Stage 2 of the RAG pipeline.
 
-Model: BAAI/bge-large-en-v1.5 (MTEB leaderboard top-10 as of 2024)
+Model: BAAI/bge-small-en-v1.5 (MTEB top-tier, 4× smaller than bge-large)
 - Asymmetric prefixing: queries get "Represent this sentence for searching:"
 - Documents get no prefix (per BGE model card)
 - Batching with retry for HF serverless rate limits
@@ -42,7 +42,7 @@ def _embed_batch(texts: List[str], retries: int = MAX_RETRIES) -> List[List[floa
                 arr = arr.mean(axis=1)
             # normalize for cosine similarity
             norms = np.linalg.norm(arr, axis=1, keepdims=True)
-            arr = arr / np.where(norms == 0, 1e-9, norms)
+            arr = arr / np.where(norms == 0, 1, norms)
             return arr.tolist()
         except Exception as e:
             if "503 Server Error" in str(e) or "currently loading" in str(e).lower():
@@ -53,7 +53,6 @@ def _embed_batch(texts: List[str], retries: int = MAX_RETRIES) -> List[List[floa
             if attempt == retries - 1:
                 raise RuntimeError(f"[Embeddings] Failed after {retries} retries: {e}")
             time.sleep(2 ** attempt)
-    raise RuntimeError("[Embeddings] Exhausted retries")
 
 def embed_documents(texts: List[str]) -> List[List[float]]:
     all_embeddings = []

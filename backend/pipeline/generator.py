@@ -132,8 +132,11 @@ def generate(query: str, chunks: List[Dict[str, Any]], model: str = None,
                 if attempt < 2:
                     time.sleep(2)
                     continue
-                # Last attempt: return the raw thinking rather than an empty string
-                return raw.strip()
+                return (
+                    "The model used all available tokens for reasoning without producing "
+                    "an answer. Please increase the token limit and try again, or switch "
+                    "to a different model."
+                )
 
             return result
 

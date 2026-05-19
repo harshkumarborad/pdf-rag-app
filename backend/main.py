@@ -149,6 +149,10 @@ def _index_in_background(session_id: str, saved_paths: List[str]):
 
 # ── Upload Endpoint ────────────────────────────────────────────────────────────
 
+_MAX_FILE_MB = 50
+_MAX_FILE_BYTES = _MAX_FILE_MB * 1024 * 1024
+
+
 @app.post("/upload", response_model=UploadResponse)
 async def upload_pdfs(
     background_tasks: BackgroundTasks,
@@ -161,12 +165,25 @@ async def upload_pdfs(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
 
-    for f in files:
-        if not f.filename.lower().endswith(".pdf"):
+    # Validate all files before creating any session state
+    file_data: List[tuple] = []
+    for upload in files:
+        if not upload.filename.lower().endswith(".pdf"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Only PDF files accepted. Got: {f.filename}"
+                detail=f"Only PDF files accepted. Got: {upload.filename}"
             )
+        content = await upload.read()
+        if len(content) > _MAX_FILE_BYTES:
+            size_mb = len(content) // (1024 * 1024)
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"'{upload.filename}' is {size_mb} MB — exceeds the "
+                    f"{_MAX_FILE_MB} MB per-file limit."
+                ),
+            )
+        file_data.append((upload.filename, content))
 
     session_id = uuid.uuid4().hex[:8]
     session_dir = Path(config.UPLOAD_DIR) / session_id
@@ -174,12 +191,11 @@ async def upload_pdfs(
 
     saved_paths = []
     filenames = []
-    for upload in files:
-        dest = session_dir / upload.filename
-        with open(dest, "wb") as out:
-            out.write(await upload.read())
+    for filename, content in file_data:
+        dest = session_dir / filename
+        dest.write_bytes(content)
         saved_paths.append(str(dest))
-        filenames.append(upload.filename)
+        filenames.append(filename)
 
     # Register session as "indexing" before kicking off background task
     _sessions[session_id] = {

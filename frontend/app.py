@@ -225,7 +225,7 @@ with st.sidebar:
 st.markdown("""
 <div class='hero'>
   <h1>RAG Document Chat &mdash; <span>Agentur Philipp GmbH</span></h1>
-  <p>Upload PDFs · Chat with sources · DeepSeek-R1 &nbsp;·&nbsp; BAAI/bge-large-en-v1.5 &nbsp;·&nbsp; ChromaDB HNSW</p>
+  <p>Upload PDFs · Chat with sources · DeepSeek-R1 &nbsp;·&nbsp; BAAI/bge-small-en-v1.5 &nbsp;·&nbsp; ChromaDB HNSW</p>
 </div>""", unsafe_allow_html=True)
 
 if st.session_state.session_id:
@@ -319,6 +319,10 @@ with tab_chat:
                 **({"llm_model": selected_model} if selected_model else {}),
             }
 
+            stream_label = next(
+                (m["label"] for m in AVAILABLE_MODELS if m["id"] == selected_model),
+                selected_model.split("/")[-1] if selected_model else "DeepSeek-R1",
+            )
             placeholder = st.empty()
             sources: list = []
             metrics: dict = {}
@@ -356,7 +360,7 @@ with tab_chat:
                                     full_answer += tok
                                 placeholder.markdown(
                                     f"<div class='chat-ai'>"
-                                    f"<div class='label label-ai'>Agentur Philipp RAG · DeepSeek-R1 · streaming</div>"
+                                    f"<div class='label label-ai'>Agentur Philipp RAG · {stream_label} · streaming</div>"
                                     f"{full_answer.replace(chr(10), '<br>')}<span style='opacity:.5'>▍</span>"
                                     f"</div>",
                                     unsafe_allow_html=True,
@@ -497,7 +501,7 @@ with tab_info:
 |---|---|
 | **Frontend** | Streamlit |
 | **Backend** | FastAPI + Uvicorn |
-| **Embeddings** | BAAI/bge-large-en-v1.5 (HF Serverless API) |
+| **Embeddings** | BAAI/bge-small-en-v1.5 (HF Serverless API) |
 | **LLM** | DeepSeek-R1-Distill-Qwen-7B (HF Serverless API) |
 | **Vector Store** | ChromaDB (HNSW index, cosine similarity) |
 | **Chunking** | RecursiveCharacterTextSplitter (512 chars, 64 overlap) |
@@ -525,6 +529,6 @@ st.markdown("""
     📄 Agentur Philipp GmbH · RAG Document Chat
   </span>
   <div style='color:#94a3b8;font-size:.68rem;margin-top:6px'>
-    DeepSeek-R1 · BAAI/bge-large-en-v1.5 · ChromaDB HNSW · FastAPI · Streamlit
+    DeepSeek-R1 · BAAI/bge-small-en-v1.5 · ChromaDB HNSW · FastAPI · Streamlit
   </div>
 </div>""", unsafe_allow_html=True)

@@ -186,6 +186,7 @@ def retrieve(
                     "content": doc.page_content,
                     "score": round(score, 4),
                     "metadata": doc.metadata,
+                    "rerank_score": None,
                 })
                 print(f"[Retriever] Added coverage chunk from '{src}' (score={score:.4f})")
 
